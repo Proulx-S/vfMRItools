@@ -1,5 +1,5 @@
 function vessel = getFaa(vessel,rCond,dN)
-    % Flow-area-adjustment index (faa) per vessel, from the area/velocity
+    % faa index per vessel, from the area/velocity
     % proxy timeseries produced by getAreaDiamVelProxy.
     %
     % faa = 1/2 - 1/4 * (slope of dV/V vs dD/D), the poly1 fit of dV/V
@@ -76,7 +76,16 @@ function vessel = getFaa(vessel,rCond,dN)
             faa.dt     = align.dt;
             faa.align  = align;
         end
-        vessel(v).faa = doIt(vessel(v),faa,dN);
+
+        % vessel(v).faa = doIt(vessel(v),faa,dN);
+        if iscell(vessel(v).im.tsVel.vec) && iscell(vessel(v).im.tsD.vec)
+            for r = 1:length(vessel(v).im.tsVel.vec)
+                getIdx(vessel(v).im.tsVel.vec{r},vessel(v).im.tsD.vec{r},faa,dN);
+            end
+        else
+            dbstack; error('code that')
+        end
+        
     end
 
     function align = getAlign(vessel,dsgn,dt)
@@ -97,79 +106,107 @@ function vessel = getFaa(vessel,rCond,dN)
         align.tt            = tt;
         align.idxTrialOnset = round(tt./dt);
         align.idxRunOnset   = repmat(1:nT,length(dsgn.onsetList),1);
+        align.trialIdx      = repmat((1:length(dsgn.onsetList))',1,nT);
     end
 
-    function faa = doIt(vessel,faa,dN)
-        align         = faa.align;       % reusable time grid (see getAlign)
-        tt            = align.tt;
-        idxTrialOnset = align.idxTrialOnset;
-        idxRunOnset   = align.idxRunOnset;
+    function [sldWin_tt, sldWin_idxTrialOnset, sldWin_idxRunOnset, sldWin_trialIdx] = getIdx(align,dN)        
+        % align         = faa.align;       % reusable time grid (see getAlign)
+        % tt            = align.tt;
+        % idxTrialOnset = align.idxTrialOnset;
+        % idxRunOnset   = align.idxRunOnset;
 
-        % per-run proxies -> [run x time]
-        % Ats = cat(1,vessel.im.tsArea.vec{:}); Ats(Ats<0) = nan; % area (drop <0 -> imaginary D)
-        Vts = cat(1,vessel.im.tsVel.vec{:});                    % velocity
-        Dts = cat(1,vessel.im.tsD.vec{:});                      % diameter
+        
 
-        % fractional change relative to each run's mean
-        dDoDts = (Dts - mean(Dts,2)) ./ mean(Dts,2);
-        dVoVts = (Vts - mean(Vts,2)) ./ mean(Vts,2);
+        % % per-run proxies -> [run x time]
+        % % Ats = cat(1,vessel.im.tsArea.vec{:}); Ats(Ats<0) = nan; % area (drop <0 -> imaginary D)
+        % Vts = cat(1,vessel.im.tsVel.vec{:});                    % velocity
+        % Dts = cat(1,vessel.im.tsD.vec{:});                      % diameter
 
-        % faa using all time points (call-independent)
-        faa.all = fitFaa(dDoDts(:),dVoVts(:));
+        % % fractional change relative to each run's mean
+        % Dts = (Dts - mean(Dts,2)) ./ mean(Dts,2);
+        % Vts = (Vts - mean(Vts,2)) ./ mean(Vts,2);
+
+        % % faa using all time points (call-independent)
+        % faa.all = fitFaa(Dts(:),Vts(:));
 
         % windowed result for this dN
-        res.dN = dN;
+        % res.dN = dN;
         if numel(dN)==2
-            % faa within a fixed post-stim window [dN(1) dN(2)] (time points)
-            sel = idxTrialOnset>=dN(1) & idxTrialOnset<=dN(2);
-            idx = idxRunOnset(sel);
-            T   = tt(sel);
-            res.ts     = fitFaa(dDoDts(:,idx),dVoVts(:,idx));
-            res.t      = mean(T(:));
-            res.tStart = min(T(:));
-            res.tEnd   = max(T(:));
+            % % faa within a fixed post-stim window [dN(1) dN(2)] (time points)
+            % sel = idxTrialOnset>=dN(1) & idxTrialOnset<=dN(2);
+            % idx = idxRunOnset(sel);
+            % T   = tt(sel);
+            % res.ts     = fitFaa(dDoDts(:,idx),dVoVts(:,idx));
+            % res.t      = mean(T(:));
+            % res.tStart = min(T(:));
+            % res.tEnd   = max(T(:));
         else
             % faa timecourse (sliding window around each post-stim delay).
             % Cap the max delay so each trial's window stays inside its own
             % period: bound nnMax by the run end AND by the inter-onset gap, so
             % the window's forward edge (nn+dN) never reaches the next onset.
-            nnMax      = min(idxRunOnset(:,end) - idxRunOnset(idxTrialOnset==dN)); % run-end bound
-            onsetIdx   = idxRunOnset(idxTrialOnset==0);                            % onset index per trial
-            if numel(onsetIdx) > 1
-                isiPts = min(diff(sort(onsetIdx(:))));   % smallest inter-onset gap (points)
-                nnMax  = min(nnMax, isiPts-dN-1);        % keep nn+dN < next onset
+
+            idxTrialMin = align.idxTrialOnset(1,1)+dN; % run-start bound
+            idxTrialMax = -unique(diff(align.idxTrialOnset(:,1),[],1))-1-dN; % next trial bound
+            nDelays = idxTrialMax-idxTrialMin+1;
+            % idxTrialMax = min(idxTrialMax,idxTrialOnset(end,end)-dN); % run-end bound
+            % nPtsPerTrial = zeros(size(align.trialIdx,1),nDelays);
+            sldWin_tt            = cell(1,nDelays);
+            sldWin_idxTrialOnset = cell(1,nDelays);
+            sldWin_idxRunOnset   = cell(1,nDelays);
+            sldWin_trialIdx      = cell(1,nDelays);
+            idxTrial_list = idxTrialMin:idxTrialMax; 
+            for i = 1:length(idxTrial_list)
+                idxTrial = idxTrial_list(i);
+                curIdx = ismember(align.idxTrialOnset,idxTrial-dN:idxTrial+dN);
+                if any(sum(sldWin_idxRunOnset{i},1)>1); dbstack; error('getFaa:overlapTrial','overlapping trials'); end
+                sldWin_tt{i}            = align.tt(curIdx);
+                sldWin_idxTrialOnset{i} = align.idxTrialOnset(curIdx);
+                sldWin_idxRunOnset{i}   = align.idxRunOnset(curIdx);
+                sldWin_trialIdx{i}      = align.trialIdx(curIdx);
             end
-            nnMax      = max(nnMax,0);                    % guard against tiny periods
-            res.ts     = nan(1,nnMax+1);
-            res.t      = nan(1,nnMax+1);
-            res.tStart = nan(1,nnMax+1);
-            res.tEnd   = nan(1,nnMax+1);
-            for nn = 0:nnMax % loop over time points after stimulus onset
-                % Pool data points for the current post-stimulus delay
-                idxT = idxRunOnset(idxTrialOnset==0) + nn;
-                idx  = idxT;
-                T    = tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'));
-                for i = 1:dN
-                    idxT = idxRunOnset(idxTrialOnset==-i) + nn;
-                    idx  = [idx; idxT];
-                    T    = [T tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'))];
-                    idxT = idxRunOnset(idxTrialOnset== i) + nn;
-                    idx  = [idx; idxT];
-                    T    = [T tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'))];
-                end
-                res.ts(nn+1)     = fitFaa(dDoDts(:,idx),dVoVts(:,idx));
-                res.t(nn+1)      = mean(T(:));
-                res.tStart(nn+1) = min(T(:));
-                res.tEnd(nn+1)   = max(T(:));
-            end
+            
+
+
+
+
+            % nnMax      = min(align.idxRunOnset(:,end) - idxRunOnset(idxTrialOnset==dN)); % run-end bound
+            % onsetIdx   = idxRunOnset(idxTrialOnset==0);                            % onset index per trial
+            % if numel(onsetIdx) > 1
+            %     isiPts = min(diff(sort(onsetIdx(:))));   % smallest inter-onset gap (points)
+            %     nnMax  = min(nnMax, isiPts-dN-1);        % keep nn+dN < next onset
+            % end
+            % nnMax      = max(nnMax,0);                    % guard against tiny periods
+            % res.ts     = nan(1,nnMax+1);
+            % res.t      = nan(1,nnMax+1);
+            % res.tStart = nan(1,nnMax+1);
+            % res.tEnd   = nan(1,nnMax+1);
+            % for nn = 0:nnMax % loop over time points after stimulus onset
+            %     % Pool data points for the current post-stimulus delay
+            %     idxT = idxRunOnset(idxTrialOnset==0) + nn;
+            %     idx  = idxT;
+            %     T    = tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'));
+            %     for i = 1:dN
+            %         idxT = idxRunOnset(idxTrialOnset==-i) + nn;
+            %         idx  = [idx; idxT];
+            %         T    = [T tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'))];
+            %         idxT = idxRunOnset(idxTrialOnset== i) + nn;
+            %         idx  = [idx; idxT];
+            %         T    = [T tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'))];
+            %     end
+            %     res.ts(nn+1)     = fitFaa(Dts(:,idx),Vts(:,idx));
+            %     res.t(nn+1)      = mean(T(:));
+            %     res.tStart(nn+1) = min(T(:));
+            %     res.tEnd(nn+1)   = max(T(:));
+            % end
         end
 
-        % append this result to the indexed substructure
-        if isfield(faa,'res')
-            faa.res(end+1) = res;
-        else
-            faa.res = res;
-        end
+        % % append this result to the indexed substructure
+        % if isfield(faa,'res')
+        %     faa.res(end+1) = res;
+        % else
+        %     faa.res = res;
+        % end
     end
 
     function faa = fitFaa(X,Y)
