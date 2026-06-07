@@ -196,8 +196,9 @@ function vessel = getFaa(vessel,rCond,dN)
 
     function faa = fitFaa(X,Y)
         ok = ~isnan(X(:)) & ~isnan(Y(:)); % drop NaNs (e.g. area<0 patched above)
-        f  = fit(X(ok),Y(ok),fittype({'x'}));
-        % f  = fit(X(:),Y(:),fittype({'x'})); % slope-only fit (intercept fixed at 0)
-        faa = 1/2 - 1/4*f.a;
+        % f  = fit(X(ok),Y(ok),fittype({'x'})); % slope-only fit (intercept fixed at 0)
+        % faa = 1/2 - 1/4*f.a;
+        f  = fit(X(ok),Y(ok),'poly1');
+        faa = 1/2 - 1/4*f.p1;
     end
 end
