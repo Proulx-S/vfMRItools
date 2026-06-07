@@ -145,11 +145,14 @@ function [vessel,fAll] = getAreaDiamVelProxy(vessel,srcField,tValAvFlag)
         end
         % surround fraction (unbounded; reported for diagnostics)
         frac = (zVal-tVal)./(wVal-tVal);
+        % frac = min(max(frac,0),1);
+        % frac(frac<0 | frac>1) = nan;
+        frac(frac<0) = nan;
         switch areaMethod
             case 1 % Variant 1
                 area = ( wN.*(wVal-tVal) + zN.*(zVal-tVal) ) ./ (wVal-tVal);
             case 2 % Variant 2: bound the surround fraction to [0,1]
-                area = wN + zN.*min(max(frac,0),1);
+                area = wN + zN.*frac;
             otherwise
                 error('getAreaDiamVelProxy:badAreaMethod','areaMethod must be 1 or 2');
         end

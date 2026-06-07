@@ -25,8 +25,11 @@ function vessel = getFaa(vessel,rCond,dN)
     %              each side of each post-stim delay). The timecourse extends
     %              only as far as keeps each trial's window within its own
     %              inter-stimulus period -- the forward edge never reaches the
-    %              next stimulus onset (bounded by the run end and the smallest
-    %              inter-onset gap).
+    %              next stimulus onset.
+    %              NOTE: the sliding-window max delay is derived from a single
+    %              inter-onset interval, so a CONSTANT ISI across trials is
+    %              assumed. getFaa errors (getFaa:nonUniformISI) if the onsets
+    %              in dsgn are not equally spaced.
     %   [n1 n2] -> a single faa pooled over the fixed post-stim window from
     %              time point n1 to n2 (relative to stimulus onset).
     %
@@ -77,16 +80,10 @@ function vessel = getFaa(vessel,rCond,dN)
             faa.align  = align;
         end
 
-        % vessel(v).faa = doIt(vessel(v),faa,dN);
-        if iscell(vessel(v).im.tsVel.vec) && iscell(vessel(v).im.tsD.vec)
-            for r = 1:length(vessel(v).im.tsVel.vec)
-                getIdx(vessel(v).im.tsVel.vec{r},vessel(v).im.tsD.vec{r},faa,dN);
-            end
-        else
-            dbstack; error('code that')
-        end
-        
+        vessel(v).faa = doIt(vessel(v),faa,dN);
+        % winCols{v} = vessel(v).faa.winCols;
     end
+    % save winCols
 
     function align = getAlign(vessel,dsgn,dt)
         % run time grid (s), aligned to each stimulus onset
@@ -109,110 +106,98 @@ function vessel = getFaa(vessel,rCond,dN)
         align.trialIdx      = repmat((1:length(dsgn.onsetList))',1,nT);
     end
 
-    function [sldWin_tt, sldWin_idxTrialOnset, sldWin_idxRunOnset, sldWin_trialIdx] = getIdx(align,dN)        
-        % align         = faa.align;       % reusable time grid (see getAlign)
-        % tt            = align.tt;
-        % idxTrialOnset = align.idxTrialOnset;
-        % idxRunOnset   = align.idxRunOnset;
+    function faa = doIt(vessel,faa,dN)
+        align = faa.align;       % reusable time grid (see getAlign)
 
-        
+        % per-run proxies -> [run x time], gathered across runs before fitting
+        % Ats = cat(1,vessel.im.tsArea.vec{:}); Ats(Ats<0) = nan; % area (drop <0 -> imaginary D)
+        Vts = cat(1,vessel.im.tsVel.vec{:});                    % velocity
+        Dts = cat(1,vessel.im.tsD.vec{:});                      % diameter
 
-        % % per-run proxies -> [run x time]
-        % % Ats = cat(1,vessel.im.tsArea.vec{:}); Ats(Ats<0) = nan; % area (drop <0 -> imaginary D)
-        % Vts = cat(1,vessel.im.tsVel.vec{:});                    % velocity
-        % Dts = cat(1,vessel.im.tsD.vec{:});                      % diameter
+        % fractional change relative to each run's mean
+        dDoDts = (Dts - mean(Dts,2,'omitnan')) ./ mean(Dts,2,'omitnan');
+        dVoVts = (Vts - mean(Vts,2)) ./ mean(Vts,2);
 
-        % % fractional change relative to each run's mean
-        % Dts = (Dts - mean(Dts,2)) ./ mean(Dts,2);
-        % Vts = (Vts - mean(Vts,2)) ./ mean(Vts,2);
-
-        % % faa using all time points (call-independent)
-        % faa.all = fitFaa(Dts(:),Vts(:));
-
-        % windowed result for this dN
-        % res.dN = dN;
-        if numel(dN)==2
-            % % faa within a fixed post-stim window [dN(1) dN(2)] (time points)
-            % sel = idxTrialOnset>=dN(1) & idxTrialOnset<=dN(2);
-            % idx = idxRunOnset(sel);
-            % T   = tt(sel);
-            % res.ts     = fitFaa(dDoDts(:,idx),dVoVts(:,idx));
-            % res.t      = mean(T(:));
-            % res.tStart = min(T(:));
-            % res.tEnd   = max(T(:));
-        else
-            % faa timecourse (sliding window around each post-stim delay).
-            % Cap the max delay so each trial's window stays inside its own
-            % period: bound nnMax by the run end AND by the inter-onset gap, so
-            % the window's forward edge (nn+dN) never reaches the next onset.
-
-            idxTrialMin = align.idxTrialOnset(1,1)+dN; % run-start bound
-            idxTrialMax = -unique(diff(align.idxTrialOnset(:,1),[],1))-1-dN; % next trial bound
-            nDelays = idxTrialMax-idxTrialMin+1;
-            % idxTrialMax = min(idxTrialMax,idxTrialOnset(end,end)-dN); % run-end bound
-            % nPtsPerTrial = zeros(size(align.trialIdx,1),nDelays);
-            sldWin_tt            = cell(1,nDelays);
-            sldWin_idxTrialOnset = cell(1,nDelays);
-            sldWin_idxRunOnset   = cell(1,nDelays);
-            sldWin_trialIdx      = cell(1,nDelays);
-            idxTrial_list = idxTrialMin:idxTrialMax; 
-            for i = 1:length(idxTrial_list)
-                idxTrial = idxTrial_list(i);
-                curIdx = ismember(align.idxTrialOnset,idxTrial-dN:idxTrial+dN);
-                if any(sum(sldWin_idxRunOnset{i},1)>1); dbstack; error('getFaa:overlapTrial','overlapping trials'); end
-                sldWin_tt{i}            = align.tt(curIdx);
-                sldWin_idxTrialOnset{i} = align.idxTrialOnset(curIdx);
-                sldWin_idxRunOnset{i}   = align.idxRunOnset(curIdx);
-                sldWin_trialIdx{i}      = align.trialIdx(curIdx);
-            end
-            
-
-
-
-
-            % nnMax      = min(align.idxRunOnset(:,end) - idxRunOnset(idxTrialOnset==dN)); % run-end bound
-            % onsetIdx   = idxRunOnset(idxTrialOnset==0);                            % onset index per trial
-            % if numel(onsetIdx) > 1
-            %     isiPts = min(diff(sort(onsetIdx(:))));   % smallest inter-onset gap (points)
-            %     nnMax  = min(nnMax, isiPts-dN-1);        % keep nn+dN < next onset
-            % end
-            % nnMax      = max(nnMax,0);                    % guard against tiny periods
-            % res.ts     = nan(1,nnMax+1);
-            % res.t      = nan(1,nnMax+1);
-            % res.tStart = nan(1,nnMax+1);
-            % res.tEnd   = nan(1,nnMax+1);
-            % for nn = 0:nnMax % loop over time points after stimulus onset
-            %     % Pool data points for the current post-stimulus delay
-            %     idxT = idxRunOnset(idxTrialOnset==0) + nn;
-            %     idx  = idxT;
-            %     T    = tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'));
-            %     for i = 1:dN
-            %         idxT = idxRunOnset(idxTrialOnset==-i) + nn;
-            %         idx  = [idx; idxT];
-            %         T    = [T tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'))];
-            %         idxT = idxRunOnset(idxTrialOnset== i) + nn;
-            %         idx  = [idx; idxT];
-            %         T    = [T tt(sub2ind(size(tt), 1:size(tt,1), idxT(:)'))];
-            %     end
-            %     res.ts(nn+1)     = fitFaa(Dts(:,idx),Vts(:,idx));
-            %     res.t(nn+1)      = mean(T(:));
-            %     res.tStart(nn+1) = min(T(:));
-            %     res.tEnd(nn+1)   = max(T(:));
-            % end
+        % faa using all time points, all runs pooled (call-independent)
+        if ~isfield(faa,'all') || isempty(faa.all)
+            faa.all = fitFaa(dDoDts(:),dVoVts(:));
         end
 
-        % % append this result to the indexed substructure
-        % if isfield(faa,'res')
-        %     faa.res(end+1) = res;
-        % else
-        %     faa.res = res;
-        % end
+        % time-column index sets for each post-stim window (run-independent)
+        [winCols,winTT] = getIdx(align,dN);
+
+        res.dN     = dN;
+        nWin       = numel(winCols);
+        res.ts     = nan(1,nWin);
+        res.t      = nan(1,nWin);
+        res.tStart = nan(1,nWin);
+        res.tEnd   = nan(1,nWin);
+        for i = 1:nWin
+            cols = winCols{i};
+            % pool runs (rows) x window columns, then slope-only fit
+            res.ts(i)     = fitFaa(dDoDts(:,cols),dVoVts(:,cols));
+            res.t(i)      = mean(winTT{i}(:));
+            res.tStart(i) = min(winTT{i}(:));
+            res.tEnd(i)   = max(winTT{i}(:));
+        end
+
+        % append this result to the indexed substructure
+        if isfield(faa,'res')
+            faa.res(end+1) = res;
+        else
+            faa.res = res;
+        end
+        faa.winCols = winCols;
+    end
+
+    function [winCols,winTT] = getIdx(align,dN)
+        % For each post-stim window position, return the time-column indices
+        % (into the [run x time] proxy matrices) and their onset-relative
+        % times. Index sets are run-independent: the align grid is shared
+        % across runs, so fitting pools runs by indexing these columns.
+        isi = -unique(diff(align.idxTrialOnset(:,1),[],1)); % inter-onset interval (points)
+        if ~isscalar(isi)
+            error('getFaa:nonUniformISI', ...
+                ['getFaa''s sliding-window bound assumes a constant inter-onset ' ...
+                    'interval; got ISIs %s points.'],mat2str(-isi'));
+        end
+        if numel(dN)==2
+            % single fixed post-stim window [dN(1) dN(2)] (time points)
+            if dN(2)==inf; dN(2) = isi-1; end
+            sel     = align.idxTrialOnset>=dN(1) & align.idxTrialOnset<=dN(2);
+            winCols = {align.idxRunOnset(sel)};
+            winTT   = {align.tt(sel)};
+        else
+            % faa timecourse (sliding window, half-width dN, around each
+            % post-stim delay). Cap the max delay so each trial's window stays
+            % inside its own inter-onset period -- the forward edge never
+            % reaches the next onset. NOTE: a CONSTANT inter-onset interval is
+            % assumed (see header).
+            idxTrialMin = align.idxTrialOnset(1,1)+dN; % run-start bound
+            idxTrialMax   = isi-1-dN; % next-trial bound
+            idxTrial_list = idxTrialMin:idxTrialMax;
+            nDelays       = numel(idxTrial_list);
+            winCols = cell(1,nDelays);
+            winTT   = cell(1,nDelays);
+            for i = 1:nDelays
+                idxTrial = idxTrial_list(i);
+                curIdx   = ismember(align.idxTrialOnset,idxTrial-dN:idxTrial+dN);
+                cols     = align.idxRunOnset(curIdx);
+                % no time column may be selected twice at one delay (it would be
+                % double-counted in the fit): a repeat means trial windows overlap
+                if numel(unique(cols)) < numel(cols)
+                    dbstack; error('getFaa:overlapTrial','overlapping trials');
+                end
+                winCols{i} = cols;
+                winTT{i}   = align.tt(curIdx);
+            end
+        end
     end
 
     function faa = fitFaa(X,Y)
-        % ok = ~isnan(X(:)) & ~isnan(Y(:)); % drop NaNs (e.g. area<0 patched above)
-        % f  = fit(X(ok),Y(ok),fittype({'x'}));
-        f  = fit(X(:),Y(:),fittype({'x'})); % slope-only fit (intercept fixed at 0)
+        ok = ~isnan(X(:)) & ~isnan(Y(:)); % drop NaNs (e.g. area<0 patched above)
+        f  = fit(X(ok),Y(ok),fittype({'x'}));
+        % f  = fit(X(:),Y(:),fittype({'x'})); % slope-only fit (intercept fixed at 0)
         faa = 1/2 - 1/4*f.a;
     end
 end
