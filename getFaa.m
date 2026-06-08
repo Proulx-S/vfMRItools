@@ -34,14 +34,18 @@ function vessel = getFaa(vessel,rCond,dN)
     %              time point n1 to n2 (relative to stimulus onset).
     %
     % Output: vessel, with vessel(v).faa:
-    %   .dt     : timeseries sampling period (s)
-    %   .align  : reusable time grid (dt, tt, idxTrialOnset, idxRunOnset)
-    %   .all    : scalar faa using all time points pooled together (call-independent)
+    %   .dt      : timeseries sampling period (s)
+    %   .align   : reusable time grid (dt, tt, idxTrialOnset, idxRunOnset)
+    %   .all     : scalar faa using all time points pooled together (call-independent)
+    %   .allYint : y-intercept (dV/V at dD/D=0) of the all-points poly1 fit
+    %   .allXint : x-intercept (dD/D at dV/V=0) of the all-points poly1 fit
     %   .res    : indexed struct array, one element appended per getFaa call
     %             (the rCond call creates res(1); each reuse call appends res(end+1)):
     %       .dN     : the dN used for this result
     %       .ts     : faa value(s) -- [1 x nDelay] for the sliding-window
     %                 timecourse, scalar for a fixed [n1 n2] window
+    %       .yint   : poly1 fit y-intercept (dV/V at dD/D=0), one per .ts entry
+    %       .xint   : poly1 fit x-intercept (dD/D at dV/V=0), one per .ts entry
     %       .t      : mean post-stim time (s) for each .ts entry
     %       .tStart : window start time (s) for each .ts entry
     %       .tEnd   : window end time (s) for each .ts entry
@@ -120,7 +124,7 @@ function vessel = getFaa(vessel,rCond,dN)
 
         % faa using all time points, all runs pooled (call-independent)
         if ~isfield(faa,'all') || isempty(faa.all)
-            faa.all = fitFaa(dDoDts(:),dVoVts(:));
+            [faa.all,faa.allYint,faa.allXint] = fitFaa(dDoDts(:),dVoVts(:));
         end
 
         % time-column index sets for each post-stim window (run-independent)
@@ -129,13 +133,15 @@ function vessel = getFaa(vessel,rCond,dN)
         res.dN     = dN;
         nWin       = numel(winCols);
         res.ts     = nan(1,nWin);
+        res.yint   = nan(1,nWin);
+        res.xint   = nan(1,nWin);
         res.t      = nan(1,nWin);
         res.tStart = nan(1,nWin);
         res.tEnd   = nan(1,nWin);
         for i = 1:nWin
             cols = winCols{i};
-            % pool runs (rows) x window columns, then slope-only fit
-            res.ts(i)     = fitFaa(dDoDts(:,cols),dVoVts(:,cols));
+            % pool runs (rows) x window columns, then poly1 fit
+            [res.ts(i),res.yint(i),res.xint(i)] = fitFaa(dDoDts(:,cols),dVoVts(:,cols));
             res.t(i)      = mean(winTT{i}(:));
             res.tStart(i) = min(winTT{i}(:));
             res.tEnd(i)   = max(winTT{i}(:));
@@ -194,11 +200,13 @@ function vessel = getFaa(vessel,rCond,dN)
         end
     end
 
-    function faa = fitFaa(X,Y)
+    function [faa,yint,xint] = fitFaa(X,Y)
         ok = ~isnan(X(:)) & ~isnan(Y(:)); % drop NaNs (e.g. area<0 patched above)
         % f  = fit(X(ok),Y(ok),fittype({'x'})); % slope-only fit (intercept fixed at 0)
         % faa = 1/2 - 1/4*f.a;
-        f  = fit(X(ok),Y(ok),'poly1');
-        faa = 1/2 - 1/4*f.p1;
+        f   = fit(X(ok),Y(ok),'poly1');
+        faa  = 1/2 - 1/4*f.p1;
+        yint = f.p2;          % dV/V at dD/D=0 (fit y-intercept)
+        xint = -f.p2./f.p1;   % dD/D at dV/V=0 (fit x-intercept)
     end
 end
