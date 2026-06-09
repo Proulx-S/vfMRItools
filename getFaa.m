@@ -1,6 +1,6 @@
 function vessel = getFaa(vessel,rCond,dN)
     % faa index per vessel, from the area/velocity
-    % proxy timeseries produced by getAreaDiamVelProxy.
+    % proxy timeseries produced by getAreaDiamVelFlowProxy.
     %
     % faa = 1/2 - 1/4 * (slope of dV/V vs dD/D), the poly1 fit of dV/V
     % against dD/D. dD/D is derived
@@ -113,14 +113,10 @@ function vessel = getFaa(vessel,rCond,dN)
     function faa = doIt(vessel,faa,dN)
         align = faa.align;       % reusable time grid (see getAlign)
 
-        % per-run proxies -> [run x time], gathered across runs before fitting
-        % Ats = cat(1,vessel.im.tsArea.vec{:}); Ats(Ats<0) = nan; % area (drop <0 -> imaginary D)
-        Vts = cat(1,vessel.im.tsVel.vec{:});                    % velocity
-        Dts = cat(1,vessel.im.tsD.vec{:});                      % diameter
-
-        % fractional change relative to each run's mean
-        dDoDts = (Dts - mean(Dts,2,'omitnan')) ./ mean(Dts,2,'omitnan');
-        dVoVts = (Vts - mean(Vts,2)) ./ mean(Vts,2);
+        % fractional changes dD/D, dV/V (dedicated .vecBase baseline) as computed by
+        % getAreaDiamVelFlowProxy; pooled across runs -> [run x time] before fitting.
+        dDoDts = cat(1,vessel.im.tsDoD.vec{:});
+        dVoVts = cat(1,vessel.im.tsVoV.vec{:});
 
         % faa using all time points, all runs pooled (call-independent)
         if ~isfield(faa,'all') || isempty(faa.all)
