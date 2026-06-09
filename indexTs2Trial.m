@@ -44,7 +44,7 @@ function vessel = indexTs2Trial(vessel,rCond,dN)
     %       .tStart  : min    onset-relative time (s) per window
     %       .tEnd    : max    onset-relative time (s) per window
     %
-    % Companion functions: getFaa2.m (faa from the pooled dV/V vs dD/D slope over
+    % Companion functions: getFaa.m (faa from the pooled dV/V vs dD/D slope over
     % these windows) and getAreaDiamVelFlowFaaProxyFromTs.m (windowed proxies).
 
     if nargin<3; dN = 3; end

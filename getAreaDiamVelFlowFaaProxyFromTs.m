@@ -4,7 +4,7 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     % stimulus-onset grid as faa -- so the dX/X and dQ/Q timecourses line up in
     % time with the faa timecourse. (The companion getAreaDiamVelFlowProxy 'resp'
     % proxies instead live on the deconvolution IRF grid.) It also computes faa per
-    % window via getFaa2.
+    % window via getFaa.
     %
     % How: the per-(run,time) raw-ts proxies (vessel.im.ts*, from
     % getAreaDiamVelFlowProxy) are pooled into onset-relative windows by
@@ -28,7 +28,7 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     %   vessel(v).fromTs.<name> : struct with .mean and .sem (each 1 x nWin), for
     %       <name> in Area, Vel, Diam   (raw proxies, window mean)
     %                 AoA, VoV, DoD, QoQe, QoQa  (dX/X & dQ/Q, window mean)
-    %   vessel(v).faa2 : faa per window (see getFaa2)
+    %   vessel(v).faa : faa per window (see getFaa)
 
     if nargin<3; dN = 3; end
 
@@ -69,5 +69,5 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     end
 
     % faa per window from the pooled dV/V vs dD/D slope (same indices)
-    vessel = getFaa2(vessel);
+    vessel = getFaa(vessel);
 end
