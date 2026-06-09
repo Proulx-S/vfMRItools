@@ -19,8 +19,12 @@ function vessel = indexTs2Trial(vessel,rCond,dN)
     %            (vessel(v).im.tsArea.vec, a per-run cell of [vox x time]) so the
     %            number of time points per run is known. On reuse calls (rCond=[])
     %            the stored vessel(v).trial.align is used instead.
-    %   rCond  : the task struct (.dsgn onsets, .tr timeseries TR) on the first
-    %            call; [] to reuse the stored grid.
+    %   rCond  : the task struct/runCond (.dsgn onsets, .tr timeseries TR, and
+    %            .tsStartTime = (nFrameOrig-nFrame)*tr, the time of the first
+    %            dummy-removed ts frame rel. to the full-ts 0s start) on the first
+    %            call; [] to reuse the stored grid. tsStartTime is REQUIRED (errors
+    %            if missing/empty): onsetList is in full-ts time, so the ts grid is
+    %            built starting at tsStartTime -> outputs are true-onset-relative.
     %   dN     : window spec (default 3), same semantics as getFaa:
     %            scalar  -> sliding-window timecourse (half-width dN points; the
     %                       forward edge never reaches the next onset, so a CONSTANT
@@ -57,6 +61,18 @@ function vessel = indexTs2Trial(vessel,rCond,dN)
                 mat2str(unique(tr)'));
         end
         dt = mean(tr);
+        % ts time-grid offset (required, no fallback): the preprocessed (dummy-removed) ts
+        % starts at tsStartTime = (nFrameOrig-nFrame)*tr in the full (with-dummy) acquisition
+        % timeline, while dsgn.onsetList is in that full-ts time. The grid is built starting at
+        % tsStartTime so onsets land on the true frame (the alignment, not a downstream relabel).
+        hasTs = (isobject(rCond) && isprop(rCond,'tsStartTime')) || (isstruct(rCond) && isfield(rCond,'tsStartTime'));
+        if ~hasTs || isempty(rCond.tsStartTime)
+            error('indexTs2Trial:noTsStartTime', ['rCond.tsStartTime is missing/empty. Set it to ' ...
+                '(nFrameOrig-nFrame)*tr -- the time (s) of the first preprocessed (dummy-removed) ts ' ...
+                'frame relative to the full-ts 0s start. dsgn.onsetList is in full-ts time, so the ' ...
+                'ts grid must start at tsStartTime.']);
+        end
+        tsStartTime = rCond.tsStartTime;
     end
 
     for v = 1:length(vessel)
@@ -68,18 +84,22 @@ function vessel = indexTs2Trial(vessel,rCond,dN)
             end
             trial = vessel(v).trial;            % reuse time grid; append a new window set
         else
-            align       = getAlign(vessel(v),dsgn,dt); % build time grid from the design
+            align       = getAlign(vessel(v),dsgn,dt,tsStartTime); % build time grid (full-ts time) from the design
             trial       = struct();                    % fresh; this becomes res(1)
-            trial.dt    = align.dt;
-            trial.align = align;
+            trial.dt          = align.dt;
+            trial.tsStartTime = tsStartTime;
+            trial.align       = align;
         end
         vessel(v).trial = doIt(trial,dN);
     end
 
-    function align = getAlign(vessel,dsgn,dt)
-        % run time grid (s), aligned to each stimulus onset
+    function align = getAlign(vessel,dsgn,dt,tsStartTime)
+        % run time grid in FULL-ts time (s): the dummy-removed ts starts at tsStartTime, so
+        % frame j sits at tsStartTime + (j-1)*dt. dsgn.onsetList is in full-ts time, so onsets
+        % now land on the true frame and tt is true-onset-relative. (Was linspace(0,...), which
+        % ignored the dummy offset and placed onsets nDummy frames late.)
         nT  = size(vessel.im.tsArea.vec{1},2);
-        tts = linspace(0,(nT-1)*dt,nT);
+        tts = tsStartTime + linspace(0,(nT-1)*dt,nT);
         tt  = zeros(length(dsgn.onsetList),nT);
         for i = 1:length(dsgn.onsetList)
             idx = find(ismembertol(tts,dsgn.onsetList(i),0.001));
