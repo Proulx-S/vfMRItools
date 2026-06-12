@@ -17,6 +17,12 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     % Usage (mirrors getFaa / indexTs2Trial):
     %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, rCond{S}.(acq).(task))      % dN=3
     %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, rCond{S}.(acq).(task), dN)
+    %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, [], dN)                     % rCond from vessel
+    %
+    % The design/timing struct rCond (.dsgn, .tr, .tsStartTime) may instead live on
+    % the vessel itself (vessel.dsgn / vessel.tr / vessel.tsStartTime). If rCond is
+    % passed it is used; if it is empty/omitted these vessel fields are used as the
+    % fallback; if neither is available, this errors.
     %
     % Requires the raw-ts proxies on the input (run getAreaDiamVelFlowProxy with the
     % 'ts' field first): vessel.im.tsArea / tsVel / tsDiam and
@@ -31,6 +37,14 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     %   vessel(v).faa : faa per window (see getFaa)
 
     if nargin<3; dN = 3; end
+    if nargin<2; rCond = []; end
+
+    % Resolve the design/timing struct (rCond): use the passed rCond when given,
+    % otherwise fall back to the fields now carried on the vessel; error if neither
+    % is available.
+    if isempty(rCond)
+        rCond = rCondFromVessel(vessel);
+    end
 
     % build / reuse the onset-relative window index (sliding timecourse for dN scalar)
     vessel = indexTs2Trial(vessel,rCond,dN);
@@ -70,4 +84,28 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
 
     % faa per window from the pooled dV/V vs dD/D slope (same indices)
     vessel = getFaa(vessel);
+end
+
+function rCond = rCondFromVessel(vessel)
+    % Build an rCond-equivalent (.dsgn, .tr, .tsStartTime) from the fields now
+    % carried on the vessel. One shared rCond is used for the whole array (as when
+    % it is passed in), so it is taken from vessel(1). Errors if any field is
+    % missing/empty -- there is no rCond and no fallback.
+    need    = {'dsgn','tr','tsStartTime'};
+    missing = need(~isfield(vessel,need));
+    for k = 1:numel(need)
+        if isfield(vessel,need{k}) && isempty(vessel(1).(need{k}))
+            missing{end+1} = need{k}; %#ok<AGROW>
+        end
+    end
+    if ~isempty(missing)
+        error('getAreaDiamVelFlowFaaProxyFromTs:noRCond', ...
+            ['rCond not provided and vessel is missing the fallback design/timing ' ...
+             'field(s): %s. Either pass rCond (the task struct with .dsgn/.tr/.tsStartTime) ' ...
+             'or set those fields on vessel.'], strjoin(unique(missing),', '));
+    end
+    rCond             = struct();
+    rCond.dsgn        = vessel(1).dsgn;
+    rCond.tr          = vessel(1).tr;
+    rCond.tsStartTime = vessel(1).tsStartTime;
 end
