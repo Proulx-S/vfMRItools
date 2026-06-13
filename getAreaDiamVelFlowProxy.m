@@ -75,8 +75,7 @@ function [vessel,fAll] = getAreaDiamVelFlowProxy(vessel,lumenMask,surroundMask,s
             vessel(v).im.([fld 'VoV' ])  = getdXoX(vessel(v).im.([fld 'Vel' ]), baseMode, 'dV/V = (V-V0)/V0');
             vessel(v).im.([fld 'DoD' ])  = getdXoX(vessel(v).im.([fld 'Diam']), baseMode, 'dD/D = (D-D0)/D0');
 
-            vessel(v).im.([fld 'QoQe']) = getdQoQ(vessel(v).im.([fld 'VoV' ]),vessel(v).im.([fld 'AoA' ]),'exact','dQ/Q exact: (1+dV/V).*(1+dA/A)-1, Q=V*A');
-            vessel(v).im.([fld 'QoQa']) = getdQoQ(vessel(v).im.([fld 'VoV' ]),vessel(v).im.([fld 'AoA' ]),'aprox' ,'dQ/Q 1st-order: dV/V + dA/A');
+            vessel(v).im.([fld 'QoQ']) = getdQoQ2(vessel(v).im.([fld 'VoV' ]),vessel(v).im.([fld 'DoD']));
         end
     end
 
@@ -224,21 +223,14 @@ function [vessel,fAll] = getAreaDiamVelFlowProxy(vessel,lumenMask,surroundMask,s
         end
     end
 
-    % --- volumetric flow change dQ/Q from the dV/V and dA/A proxy structs.
-    %     mode 'exact' -> (1+dV/V).*(1+dA/A)-1 (Q=V*A); 'aprox' -> dV/V + dA/A.
-    function s = getdQoQ(VoV,AoA,mode,info2)
-        s = VoV; s.info2 = info2;
-        switch mode
-            case 'exact'
-                dQoQ = @(vv,aa) (1+vv).*(1+aa) - 1;
-            case 'aprox'
-                dQoQ = @(vv,aa) vv + aa;
-            otherwise; error('getdQoQ:badMode','mode must be ''exact'' or ''aprox''');
+    function QoQ = getdQoQ2(VoV,DoD)
+        QoQ = VoV;
+        for r = 1:length(VoV.vec)
+            QoQ.vec{r}     = computeQoQ(VoV.vec{r}    ,DoD.vec{r}    );
+            QoQ.vecBase{r} = [];
         end
-        if iscell(VoV.vec)
-            s.vec = cellfun(dQoQ,VoV.vec,AoA.vec,'UniformOutput',false);
-        else
-            s.vec = dQoQ(VoV.vec,AoA.vec);
-        end
+        QoQ.info2 = 'QoQ = (1+VoV).*(1+DoD).^2 - 1;';
     end
+
+
 end

@@ -35,14 +35,15 @@ function vessel = getFaa(vessel)
         faaS.align = vessel(v).trial.align;
 
         % faa using all time points, all runs pooled (window-independent)
-        [faaS.all,faaS.allYint,faaS.allXint] = fitFaa(dDoDts(:),dVoVts(:));
+        faaS.all = computeFaa(mean(dDoDts(:),[1 2]),mean(dVoVts(:),[1 2]),'exact');
+        % [faaS.all,faaS.allYint,faaS.allXint] = fitFaa(dDoDts(:),dVoVts(:));
 
         for k = 1:numel(vessel(v).trial.res)
             tr   = vessel(v).trial.res(k);
             nWin = numel(tr.winCols);
             res = struct();
             res.dN     = tr.dN;
-            res.ts     = nan(1,nWin);
+            res.Faa    = nan(1,nWin);
             res.yint   = nan(1,nWin);
             res.xint   = nan(1,nWin);
             res.t      = tr.t;
@@ -51,7 +52,15 @@ function vessel = getFaa(vessel)
             for i = 1:nWin
                 cols = tr.winCols{i};
                 % pool runs (rows) x window columns, then poly1 fit
-                [res.ts(i),res.yint(i),res.xint(i)] = fitFaa(dDoDts(:,cols),dVoVts(:,cols));
+                % res.Faa(i) = median(computeFaa(dDoDts(:,cols),dVoVts(:,cols),'exact'),[1 2]);
+                % res.Faa(i) = computeFaa(median(dDoDts(:,cols),[1 2]),median(dVoVts(:,cols),[1 2]),'exact');
+                % res.Faa(i) = computeFaa(median(dDoDts(:,cols),[1 2]),median(dVoVts(:,cols),[1 2]),'aprox');
+                % res.Faa(i) = median(computeFaa(dDoDts(:,cols),dVoVts(:,cols),'aprox'),[1 2]);
+                [res.Faa(i),res.yint(i),res.xint(i)] = computeFaa(dDoDts(:,cols),dVoVts(:,cols),'aproxSlope');
+                % [res.Faa(i),res.yint(i),res.xint(i)] = computeFaa(dDoDts(:,cols),dVoVts(:,cols),'aproxSlope0');
+                
+                
+                % [res.ts(i),res.yint(i),res.xint(i)] = fitFaa(dDoDts(:,cols),dVoVts(:,cols));
             end
             if isfield(faaS,'res'); faaS.res(end+1) = res; else; faaS.res = res; end
         end
@@ -59,11 +68,11 @@ function vessel = getFaa(vessel)
         vessel(v).faa = faaS;
     end
 
-    function [faa,yint,xint] = fitFaa(X,Y)
-        ok = ~isnan(X(:)) & ~isnan(Y(:)); % drop NaNs (e.g. area<0 patched upstream)
-        f    = fit(X(ok),Y(ok),'poly1');
-        faa  = 1/2 - 1/4*f.p1;
-        yint = f.p2;          % dV/V at dD/D=0 (fit y-intercept)
-        xint = -f.p2./f.p1;   % dD/D at dV/V=0 (fit x-intercept)
-    end
+    % function [faa,yint,xint] = fitFaa(X,Y)
+    %     ok = ~isnan(X(:)) & ~isnan(Y(:)); % drop NaNs (e.g. area<0 patched upstream)
+    %     f    = fit(X(ok),Y(ok),'poly1');
+    %     faa  = 1/2 - 1/4*f.p1;
+    %     yint = f.p2;          % dV/V at dD/D=0 (fit y-intercept)
+    %     xint = -f.p2./f.p1;   % dD/D at dV/V=0 (fit x-intercept)
+    % end
 end

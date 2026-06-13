@@ -50,7 +50,7 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     vessel = indexTs2Trial(vessel,rCond,dN);
 
     rawFlds = {'Area','Vel','Diam'};             % raw proxies (window mean)
-    frcFlds = {'AoA','VoV','DoD','QoQe','QoQa'};  % fractional-change / flow proxies
+    frcFlds = {'AoA','VoV','DoD','QoQ'};  % fractional-change / flow proxies
     allFlds = [rawFlds frcFlds];
 
     for v = 1:length(vessel)
