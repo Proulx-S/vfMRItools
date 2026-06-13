@@ -64,7 +64,7 @@ function [vessel,fAll] = getAreaDiamVelFlowProxy(vessel,lumenMask,surroundMask,s
             addBaseFlag = startsWith(fld,'resp');
             [vessel(v).im.([fld 'Area']), ...
              vessel(v).im.([fld 'Vel']), ...
-             vessel(v).im.([fld 'Diam'])] = doIt(vessel(v),lumenMask,surroundMask,fld,addBaseFlag);
+             vessel(v).im.([fld 'Diam']),vessel(v).im.([fld 'Area']).wMask,vessel(v).im.([fld 'Area']).zMask,vessel(v).im.([fld 'Area']).tMask] = doIt(vessel(v),lumenMask,surroundMask,fld,addBaseFlag);
 
             % fold the fractional changes (dX/X) and volumetric flow change (dQ/Q)
             % into the proxy output. Baseline X0 = the proxy on the dedicated
@@ -80,13 +80,20 @@ function [vessel,fAll] = getAreaDiamVelFlowProxy(vessel,lumenMask,surroundMask,s
         end
     end
 
-    function [outArea,outVel,outDiam] = doIt(vessel,lumenMask,surroundMask,fld,addBaseFlag)
+    function [outArea,outVel,outDiam,wMask,zMask,tMask] = doIt(vessel,lumenMask,surroundMask,fld,addBaseFlag)
         if ~exist('lumenMask'   ,'var') || isempty(lumenMask   ); lumenMask    = 'peakVox'; end
         if ~exist('surroundMask','var') || isempty(surroundMask); surroundMask = 'dilate1p5'; end
         wMask        = vessel.polyMask{ismember(vessel.polyLabel,lumenMask   )};
         zMask        = vessel.polyMask{ismember(vessel.polyLabel,surroundMask)};
         zMask(wMask) = false;
         tMask        = vessel.polyMask{ismember(vessel.polyLabel,'tissue'   )};
+
+        %-----
+        % since the surround mask is dilated from the lumen mask, it may contain tissue voxels
+        % (the latter is computed separately). Let's just remove those voxels from the tissue mask.
+        tMask(zMask) = false;
+        %-----
+
         wN = nnz(wMask);
         zN = nnz(zMask);
 
@@ -99,9 +106,9 @@ function [vessel,fAll] = getAreaDiamVelFlowProxy(vessel,lumenMask,surroundMask,s
         % shared output templates (carry over dt, masks, info, ...)
         outArea = vessel.im.(fld);
         outArea.fName = '';
-        outArea.maskResp.wMask = wMask;
-        outArea.maskResp.zMask = zMask;
-        outArea.maskResp.tMask = tMask;
+        % outArea.wMask = wMask;
+        % outArea.zMask = zMask;
+        % outArea.tMask = tMask;
         outArea.im = [];
         outArea.im2vec = [];
         outArea.info = 'vox x time';
@@ -114,9 +121,9 @@ function [vessel,fAll] = getAreaDiamVelFlowProxy(vessel,lumenMask,surroundMask,s
 
         outVel = vessel.im.(fld);
         outVel.fName = '';
-        outVel.maskResp.wMask = wMask;
-        outVel.maskResp.zMask = zMask;
-        outVel.maskResp.tMask = tMask;
+        % outVel.wMask = wMask;
+        % outVel.zMask = zMask;
+        % outVel.tMask = tMask;
         outVel.im = [];
         outVel.im2vec = wMask;
         outVel.info = 'vox x time';
@@ -124,9 +131,9 @@ function [vessel,fAll] = getAreaDiamVelFlowProxy(vessel,lumenMask,surroundMask,s
 
         outDiam = vessel.im.(fld);
         outDiam.fName = '';
-        outDiam.maskResp.wMask = wMask;
-        outDiam.maskResp.zMask = zMask;
-        outDiam.maskResp.tMask = tMask;
+        % outDiam.wMask = wMask;
+        % outDiam.zMask = zMask;
+        % outDiam.tMask = tMask;
         outDiam.im = [];
         outDiam.im2vec = [];
         outDiam.info = 'vox x time';
