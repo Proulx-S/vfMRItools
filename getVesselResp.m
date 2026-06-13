@@ -13,12 +13,27 @@ function vessel = getVesselResp(vessel)
     function [svdResp,respArea,respVel,respPeakVox,respSurVox] = doIt(vessel)
         respIm = permute(vessel.im.resp.im,[4 1 2 3]);
         wMask = vessel.polyMask{ismember(vessel.polyLabel,'peakVox')};
-        zMask = vessel.polyMask{ismember(vessel.polyLabel,'dilate1p5')}; zMask(wMask) = false;
+        zMask = vessel.polyMask{ismember(vessel.polyLabel,'dilate1p5')};
+        zMask(wMask) = false;
         tMask = vessel.polyMask{ismember(vessel.polyLabel,'tissue')};
         d2Mask = vessel.polyMask{ismember(vessel.polyLabel,'dilate2')};
         
         % SVD transform
-        svdMask = tMask|d2Mask;
+        
+        % svdMask = tMask|d2Mask;
+        
+        % svdMask = vessel.polyMask{ismember(vessel.polyLabel,'dilate1p5')};
+        
+        % svdMask = false(size(respIm,[2 3 4]));
+        % svdMask(:) = mafdr(vessel.im.actP.im(:),'BHFDR',true)<0.05;
+        
+        % svdMask = false(size(respIm,[2 3 4]));
+        % svdMask(:) = mafdr(vessel.im.respP.im(:),'BHFDR',true)<0.05;
+        
+        svdMask = vessel.im.respP.im<0.05;
+
+        % svdMask = true(size(respIm,[2 3 4]));
+        
         [U,S,V] = svd(respIm(:,svdMask),'econ','vector'); % time x vox (excluding those containing other vessels)
         % rectify singular vectors for a positive maximum deflection of the temporal singular vector
         [~,b] = max(abs(U),[],1);

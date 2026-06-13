@@ -35,7 +35,8 @@ function vessel = getFaa(vessel)
         faaS.align = vessel(v).trial.align;
 
         % faa using all time points, all runs pooled (window-independent)
-        faaS.all = computeFaa(mean(dDoDts(:),[1 2]),mean(dVoVts(:),[1 2]),'exact');
+        % faaS.all = computeFaa(mean(dDoDts(:),[1 2]),mean(dVoVts(:),[1 2]),'exact');
+        [faaS.all,faaS.allYint,faaS.allXint] = computeFaa(dDoDts(:),dVoVts(:),'aproxSlope');
         % [faaS.all,faaS.allYint,faaS.allXint] = fitFaa(dDoDts(:),dVoVts(:));
 
         for k = 1:numel(vessel(v).trial.res)
