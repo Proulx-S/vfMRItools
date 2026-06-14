@@ -3,7 +3,7 @@ function [vessel,fAll] = getAreaVel(vessel,lumenMask,surroundMask,srcField,tValA
     % caller-specified source field (raw timeseries vessel.im.ts, or a deconvolved
     % response vessel.im.resp / resp2). Area+velocity-only sibling of
     % getAreaDiamVelFlowProxy: it shares the core area/velocity computation
-    % (computeAreaVel, area variant 1) but does NOT compute diameter, dD/D or dQ/Q
+    % (computeAreaVel, area variant 2 by default) but does NOT compute diameter, dD/D or dQ/Q
     % -- those are handled separately, later in the pipeline.
     %
     % srcField : source field name, or cellstr of field names (default {'ts'}). For
