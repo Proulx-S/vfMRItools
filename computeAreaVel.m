@@ -29,7 +29,7 @@ function [area,vel,frac] = computeAreaVel(im4d,wMask,zMask,tMask,tValAvFlag,area
     zVal = mean(tsIm(:,zMask),2);
     tVal = mean(tsIm(:,tMask),2);
     if tValAvFlag
-        tVal = mean(tVal,1);            % assume stable tissue signal to avoid noise
+        tVal = mean(tVal,1,'omitnan'); % assume stable tissue signal to avoid noise (omitnan: ignore censored frames)
     end
     frac = (zVal-tVal)./(wVal-tVal);    % surround fraction (unbounded; diagnostic)
     switch areaMethod

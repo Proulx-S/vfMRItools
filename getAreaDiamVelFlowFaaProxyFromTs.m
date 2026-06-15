@@ -1,4 +1,4 @@
-function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
+function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,winSpec)
     % Windowed (onset-relative) Area/Vel/Diam, fractional-change (dX/X) and
     % volumetric-flow (dQ/Q) proxies built from the RAW timeseries, on the same
     % stimulus-onset grid as faa -- so the dX/X and dQ/Q timecourses line up in
@@ -15,9 +15,9 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     % per-run dD/D & dV/V points.
     %
     % Usage (mirrors getFaa / indexTs2Trial):
-    %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, rCond{S}.(acq).(task))      % dN=3
-    %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, rCond{S}.(acq).(task), dN)
-    %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, [], dN)                     % rCond from vessel
+    %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, rCond{S}.(acq).(task))      % winSpec=3
+    %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, rCond{S}.(acq).(task), winSpec)
+    %   vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel, [], winSpec)                     % rCond from vessel
     %
     % The design/timing struct rCond (.dsgn, .tr, .tsStartTime) may instead live on
     % the vessel itself (vessel.dsgn / vessel.tr / vessel.tsStartTime). If rCond is
@@ -30,13 +30,13 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
     %
     % Output: vessel, with
     %   vessel(v).fromTs.t  : 1 x nWin onset-relative window time (s) = the faa grid
-    %   vessel(v).fromTs.dN : the window spec used
+    %   vessel(v).fromTs.winSpec : the window spec used
     %   vessel(v).fromTs.<name> : struct with .mean and .sem (each 1 x nWin), for
     %       <name> in Area, Vel, Diam   (raw proxies, window mean)
     %                 AoA, VoV, DoD, QoQe, QoQa  (dX/X & dQ/Q, window mean)
     %   vessel(v).faa : faa per window (see getFaa)
 
-    if nargin<3; dN = 3; end
+    if nargin<3; winSpec = 3; end
     if nargin<2; rCond = []; end
 
     % Resolve the design/timing struct (rCond): use the passed rCond when given,
@@ -46,21 +46,21 @@ function vessel = getAreaDiamVelFlowFaaProxyFromTs(vessel,rCond,dN)
         rCond = rCondFromVessel(vessel);
     end
 
-    % build / reuse the onset-relative window index (sliding timecourse for dN scalar)
-    vessel = indexTs2Trial(vessel,rCond,dN);
+    % build / reuse the onset-relative window index (sliding timecourse for winSpec scalar)
+    vessel = indexTs2Trial(vessel,rCond,winSpec);
 
     rawFlds = {'Area','Vel','Diam'};             % raw proxies (window mean)
     frcFlds = {'AoA','VoV','DoD','QoQ'};  % fractional-change / flow proxies
     allFlds = [rawFlds frcFlds];
 
     for v = 1:length(vessel)
-        % the window set just built for this dN (the sliding timecourse)
+        % the window set just built for this winSpec (the sliding timecourse)
         res  = vessel(v).trial.res(end);
         nWin = numel(res.winCols);
 
         fromTs = struct();
         fromTs.t  = res.t;
-        fromTs.dN = res.dN;
+        fromTs.winSpec = res.winSpec;
         for f = 1:numel(allFlds)
             nm   = allFlds{f};
             fldS = vessel(v).im.(['ts' nm]);

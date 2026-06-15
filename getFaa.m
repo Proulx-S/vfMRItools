@@ -19,7 +19,7 @@ function vessel = getFaa(vessel)
     %   .dt, .align
     %   .all : faa pooling all time points
     %   .res(k) : one per trial.res(k) window set, with
-    %       .dN, .Faa, .t, .tStart, .tEnd  (.Faa is [1 x nWin])
+    %       .winSpec, .Faa, .t, .tStart, .tEnd  (.Faa is [1 x nWin])
 
     for v = 1:length(vessel)
         if ~isfield(vessel(v),'trial') || ~isfield(vessel(v).trial,'res')
@@ -42,7 +42,7 @@ function vessel = getFaa(vessel)
             tr   = vessel(v).trial.res(k);
             nWin = numel(tr.winCols);
             res = struct();
-            res.dN     = tr.dN;
+            res.winSpec     = tr.winSpec;
             res.Faa    = nan(1,nWin);
             res.t      = tr.t;
             res.tStart = tr.tStart;

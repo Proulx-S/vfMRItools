@@ -1,4 +1,4 @@
-function [Faa,FaaLwr,FaaUpr] = computeFaa(dDoD,dVoV,method,alpha,nBoot)
+function [Faa,FaaLwr,FaaUpr,fitObj] = computeFaa(dDoD,dVoV,method,alpha,nBoot)
     % faa from dV/V vs dD/D. With >1 output, also a confidence interval on Faa
     % (mapped from the slope CI), for the slope-fit methods.
     %   method : 'aproxSlope0' (default) | 'aproxSlope' | 'exact' | 'aprox'
@@ -13,10 +13,13 @@ function [Faa,FaaLwr,FaaUpr] = computeFaa(dDoD,dVoV,method,alpha,nBoot)
     %   FaaLwr, FaaUpr : lower/upper CI bound on Faa ([] for exact/aprox). Faa = 1/2 -
     %                    1/4*slope is decreasing in slope, so the slope UPPER bound maps
     %                    to FaaLwr and the slope LOWER bound to FaaUpr.
+    %   fitObj         : the poly1 cfit object (slope methods; [] for exact/aprox), so
+    %                    callers can reuse the exact fit line, e.g. feval(fitObj,x).
     if ~exist('method','var') || isempty(method); method = 'aproxSlope0'; end
     if ~exist('alpha','var')  || isempty(alpha);  alpha  = 0.05;          end
     if ~exist('nBoot','var')  || isempty(nBoot);  nBoot  = 0   ;          end
-    FaaLwr = []; FaaUpr = [];
+    FaaLwr = []; FaaUpr = []; fitObj = [];
+    dDoD = double(dDoD); dVoV = double(dVoV);   % fit() wants double (raw images load as single)
     switch method
         case 'exact'
             % equation 1.7
@@ -26,6 +29,7 @@ function [Faa,FaaLwr,FaaUpr] = computeFaa(dDoD,dVoV,method,alpha,nBoot)
             Faa = 1/2 - 1/4.*(dVoV./dDoD);
         case 'aproxSlope'
             f     = fit(dDoD(:),dVoV(:),'poly1');
+            fitObj = f;
             slope = f.p1;
             if nBoot==0
                 [slopeLwr,slopeUpr] = slopeCIparam(f,alpha);
@@ -38,6 +42,7 @@ function [Faa,FaaLwr,FaaUpr] = computeFaa(dDoD,dVoV,method,alpha,nBoot)
         case 'aproxSlope0'
             % intercept fixed to 0: fit through the origin (p2 constrained to 0)
             f     = fit(dDoD(:),dVoV(:),'poly1',fitoptions('poly1','Lower',[-Inf 0],'Upper',[Inf 0]));
+            fitObj = f;
             slope = f.p1;
             if nBoot==0
                 [slopeLwr,slopeUpr] = slopeCIparam(f,alpha);

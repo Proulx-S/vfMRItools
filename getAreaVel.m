@@ -19,6 +19,8 @@ function [vessel,fAll] = getAreaVel(vessel,lumenMask,surroundMask,srcField,tValA
     %            'dilate1p5') voxel masks. See getAreaDiamVelFlowProxy for the valid
     %            polyLabel entries and the baseline-recovery / .vec layout details
     %            (mirrored here).
+    % NB drift removal (detrending) and frame censoring of the 'ts' source are done
+    %    upstream by applyPreproc (in place on vessel.im.ts), before this is called.
     if nargin<2 || isempty(lumenMask);    lumenMask    = 'peakVox';   end
     if nargin<3 || isempty(surroundMask); surroundMask = 'dilate1p5'; end
     if nargin<4 || isempty(srcField);     srcField     = {'ts'};      end
@@ -55,6 +57,11 @@ function [vessel,fAll] = getAreaVel(vessel,lumenMask,surroundMask,srcField,tValA
         if ~isCell; im = {im}; end
         nRun = numel(im);
 
+        imBase = vessel.im.([fld 'Base']).im;
+        isCell = iscell(imBase);
+        if ~isCell; imBase = {imBase}; end
+    
+
         % shared output templates (carry over dt, masks, info, ...)
         outArea = vessel.im.(fld);
         outArea.fName = ''; outArea.im = []; outArea.im2vec = [];
@@ -73,7 +80,7 @@ function [vessel,fAll] = getAreaVel(vessel,lumenMask,surroundMask,srcField,tValA
 
         area = cell(1,nRun); areaBase = cell(1,nRun);
         vel  = cell(1,nRun); velBase  = cell(1,nRun);
-        base = vessel.im.basePolyRun.im;
+        % base = vessel.im.basePolyRun.im;
         if strcmp(fld,'resp')
             % By the FIR deconvolution design, responses are assumed on the same
             % scale across runs -> use the run-average baseline.
@@ -83,22 +90,16 @@ function [vessel,fAll] = getAreaVel(vessel,lumenMask,surroundMask,srcField,tValA
         end
         for r = 1:nRun
             if addBaseFlag; im{r} = im{r} + base{r}; end
-            [area{r}    , vel{r}    , frac] = computeAreaVel(im{r}  ,wMask,zMask,tMask,tValAvFlag);
-            [areaBase{r}, velBase{r}, ~   ] = computeAreaVel(base{r},wMask,zMask,tMask,tValAvFlag);
-
-            if any(frac>1) || any(frac<0)
-                warning('getAreaVel:fOutOfBounds', ...
-                    '%s, vessel %d, run %d: %d/%d surround-fraction samples outside [0,1] (%d<0, %d>1).', ...
-                    fld,v,r,nnz(frac<0 | frac>1),numel(frac),nnz(frac<0),nnz(frac>1));
-            end
+            [area{r}    , vel{r}    , ~] = computeAreaVel(im{r}    ,wMask,zMask,tMask,tValAvFlag);
+            [areaBase{r}, velBase{r}, ~] = computeAreaVel(imBase{r},wMask,zMask,tMask,tValAvFlag);
         end
 
         % single-image sources collapse the per-run cell back to a matrix
         if ~isCell
-            outArea.vec = area{1}; outVel.vec = vel{1};
+            outArea.vec     = area{1};    outVel.vec      = vel{1};
             outArea.vecBase = areaBase{1}; outVel.vecBase = velBase{1};
         else
-            outArea.vec = area; outVel.vec = vel;
+            outArea.vec     = area;     outVel.vec      = vel;
             outArea.vecBase = areaBase; outVel.vecBase = velBase;
         end
     end
